@@ -13,6 +13,8 @@
  * To understand everything else, start reading main().
  */
 
+
+#define MMod
 #define WIN32_LEAN_AND_MEAN
 #define _WIN32_WINNT			0x0500
 
@@ -146,6 +148,7 @@ static void setvisibility(HWND hwnd, bool visibility);
 static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void setup(HINSTANCE hInstance);
+void NewFunction ( );
 static void setupbar(HINSTANCE hInstance);
 static void showclientclassname(const Arg *arg); 
 static void showhide(Client *c);
@@ -166,15 +169,20 @@ static void view(const Arg *arg);
 static void zoom(const Arg *arg);
 
 /* Shell hook stuff */
-
+#ifndef MMod
 typedef BOOL (*RegisterShellHookWindowProc) (HWND);
 RegisterShellHookWindowProc RegisterShellHookWindow;
+#endif
 
 /* XXX: should be in a system header, no? */
+#ifndef MMod
+
+
 typedef struct {
     HWND    hwnd;
     RECT    rc;
 } SHELLHOOKINFO, *LPSHELLHOOKINFO;
+#endif // !MMod
 
 /* variables */
 static HWND dwmhwnd, barhwnd;
@@ -191,7 +199,7 @@ static Layout *lt[] = { NULL, NULL };
 static UINT shellhookid;	/* Window Message id */
 
 /* configuration, allows nested code to access above variables */
-#include "config.h"
+#include "config.def.h"
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[sizeof(unsigned int) * 8 < LENGTH(tags) ? -1 : 1]; };
@@ -213,6 +221,7 @@ applyrules(Client *c) {
 	/* rule matching */
 	for(i = 0; i < LENGTH(rules); i++) {
 		r = &rules[i];
+		// グローバルルールにタイトルが空 || ウィンドウのタイトルとグローバルルールが一致しない&&
 		if((!r->title || strstr(getclienttitle(c->hwnd), r->title))
 		&& (!r->class || strstr(getclientclassname(c->hwnd), r->class))) {
 			c->isfloating = r->isfloating;
@@ -244,6 +253,7 @@ attachstack(Client *c) {
 	stack = c;
 }
 
+// 参照なし
 bool
 istoolwindowof(Client *p, Client *c) {
 	debug(" istoolwindowof: %s\n", getclienttitle(p->hwnd));
@@ -278,6 +288,7 @@ buttonpress(unsigned int button, POINTS *point) {
 	if (GetKeyState(VK_SHIFT) < 0)
 		return;
 
+	// ルールにマッチするポインタの関数を呼び出す setlayout　など
 	for(i = 0; i < LENGTH(buttons); i++) {
 		if(click == buttons[i].click && buttons[i].func && buttons[i].button == button
 			&& (!buttons[i].key || GetKeyState(buttons[i].key) < 0)) {
@@ -287,6 +298,7 @@ buttonpress(unsigned int button, POINTS *point) {
 	}
 }
 
+// 死んだ時などクリーンアップのために呼び出される
 void
 cleanup() {
 	int i;
@@ -309,6 +321,7 @@ cleanup() {
 	DestroyWindow(dwmhwnd);
 }
 
+// 緊急フラグを下ろす
 void
 clearurgent(Client *c) {
 	c->isurgent = false;
@@ -318,6 +331,7 @@ void
 detach(Client *c) {
 	Client **tc;
 
+	// クライアントへのポインタ tempClient イテレートし、見つかればnull入れてる？
 	for(tc = &clients; *tc && *tc != c; tc = &(*tc)->next);
 	*tc = c->next;
 }
@@ -335,7 +349,7 @@ die(const char *errstr, ...) {
 	va_list ap;
 
 	va_start(ap, errstr);
-	vfprintf(stderr, errstr, ap);
+	vfprintf(stdout, errstr, ap);
 	va_end(ap);
 	cleanup();
 	exit(EXIT_FAILURE);
@@ -352,6 +366,7 @@ drawbar(void) {
 	unsigned long *col;
 	Client *c;
 
+	// occにクライアントのタグのフラグを立てていく 緊急なら緊急のクライアントのフラグを立てる
 	for(c = clients; c; c = c->next) {
 		occ |= c->tags;
 		if(c->isurgent)
@@ -361,11 +376,13 @@ drawbar(void) {
 	dc.x = 0;
 	for(i = 0; i < LENGTH(tags); i++) {
 		dc.w = TEXTW(tags[i]);
+		// 選ばれているなら選ばれている色で書く
 		col = tagset[seltags] & 1 << i ? dc.sel : dc.norm;
 		drawtext(tags[i], col, urg & 1 << i);
 		drawsquare(sel && sel->tags & 1 << i, occ & 1 << i, urg & 1 << i, col);
 		dc.x += dc.w;
 	}
+	// レイアウトシンボルの最大設定をdcのwに入れ、ローカルxに dc.x+レイアウトシンボルの最大設定 を入れる
 	if(blw > 0) {
 		dc.w = blw;
 		drawtext(lt[sellt]->symbol, dc.norm, false);
@@ -373,6 +390,8 @@ drawbar(void) {
 	}
 	else
 		x = dc.x;
+
+	// グローバルww -stextのwidth
 	dc.w = TEXTW(stext);
 	dc.x = ww - dc.w;
 	if(dc.x < x) {
@@ -444,10 +463,12 @@ eprint(const char *errstr, ...) {
 
 void
 setselected(Client *c) {
+	// クライアントが見えないか 存在しないなら見えるものまでcポインタを進める
 	if(!c || !ISVISIBLE(c))
 		for(c = stack; c && !ISVISIBLE(c); c = c->snext);
 	if(sel && sel != c)
 		drawborder(sel, normbordercolor);
+	// 今のクライアントをスタックとclientsから除外
 	if(c) {
 		if(c->isurgent)
 			clearurgent(c);
@@ -455,6 +476,7 @@ setselected(Client *c) {
 		attachstack(c);
 		drawborder(c, selbordercolor);
 	}
+	// 選択しているクライアント更新
 	sel = c;
 	drawbar();
 }
@@ -466,6 +488,7 @@ focus(Client *c) {
 		SetForegroundWindow(sel->hwnd);
 }
 
+// mod+jでよばれる
 void
 focusstack(const Arg *arg) {
 	Client *c = NULL, *i;
@@ -473,6 +496,7 @@ focusstack(const Arg *arg) {
 	if(!sel)
 		return;
 	if (arg->i > 0) {
+		// ISFOCUSABLEなクライアントを選択クライアントから探し、ないならクライアントすべてから探す
 		for(c = sel->next; c && !ISFOCUSABLE(c); c = c->next);
 		if(!c)
 			for(c = clients; c && !ISFOCUSABLE(c); c = c->next);
@@ -495,9 +519,11 @@ focusstack(const Arg *arg) {
 Client *
 managechildwindows(Client *p) {
 	Client *c, *t;
+	// scan関数を呼び出す https://qiita.com/katabamisan/items/081547f42512e93a31ab
 	EnumChildWindows(p->hwnd, scan, 0);
 	/* remove all child windows which were not part
 	 * of the enumeration above.
+	 * 上で列挙されなかったウィンドウすべてを削除
 	 */
 	for(c = clients; c; ) {
 		if (c->parent == p->hwnd) {
@@ -507,6 +533,13 @@ managechildwindows(Client *p) {
 			 *      this time so we also check if they are
 			 *      currently visible and if that's the case
 			 *      we keep them in our client list.
+			 *  
+ismanageableはそれほど信頼できるものではありません。
+時間の経過とともにウィンドウが変化する
+かつては管理可能であると報告された
+今回は、そうであるかどうかを確認する
+現在表示されていて、そうであれば
+クライアントリストにそれらを保存します。
 			 */
 			if (!c->isalive && !IsWindowVisible(c->hwnd)) {
 				t = c->next;
@@ -523,6 +556,7 @@ managechildwindows(Client *p) {
 	return nextchild(p, clients);
 }
 
+// クライアントリストからhwndの一致するクライアントを返す
 Client *
 getclient(HWND hwnd) {
 	Client *c;
@@ -547,6 +581,7 @@ getclienttitle(HWND hwnd) {
 	return buf;
 }
 
+// 一番親ウィンドウを返す
 HWND
 getroot(HWND hwnd){
 	HWND parent, deskwnd = GetDesktopWindow();
@@ -556,7 +591,7 @@ getroot(HWND hwnd){
 
 	return hwnd;
 }
-
+// グローバルホットキー登録 https://gist.github.com/EmissaryFromSunday/5f5331a0ce7e111fcee6
 void
 grabkeys(HWND hwnd) {
 	int i;
@@ -614,14 +649,25 @@ ismanageable(HWND hwnd){
 	 *		to be used as a floating toolbar. A tool window 
 	 *		has a title bar that is shorter than a normal 
 	 *		title bar, and the window title is drawn using 
-	 *		a smaller font. A tool window does not appear in 
+	 *		a smaller font.
+	 *		A tool window does not appear in 
 	 *		the taskbar or in the dialog that appears when 
-	 *		the user presses ALT+TAB. If a tool window has 
+	 *		the user presses ALT+TAB.
+	 *		If a tool window has 
 	 *		a system menu, its icon is not displayed on the 
-	 *		title bar. However, you can display the system 
+	 *		title bar.
+	 *		However, you can display the system 
 	 *		menu by right-clicking or by typing ALT+SPACE.
+	 *		
+	 *		ツールウィンドウ、つまりフローティングツールバーとして使用するウィンドウを作成します。
+ツールウィンドウには、通常のタイトルバーよりも短いタイトルバーがあり、ウィンドウのタイトルは小さなフォントで描画されます。
+ツールウィンドウはタスクバーまたはダイアログに表示されず、ユーザーがAlt + Tabキーを押すと表示されます。
+ます。
+ツールウィンドウがシステムメニューをもつと、そのアイコンはタイトルバーに表示されない。
+メニューを右クリックするか、ALT + SPACEと入力するとシステムメニューを表示する。
 	 */
 
+	// WS_EX_APPWINDOW
 	if ((parent == 0 && IsWindowVisible(hwnd)) || pok) {
 		if ((!istool && parent == 0) || (istool && pok)) {
 			debug("  manage: true\n");
@@ -875,6 +921,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 BOOL CALLBACK 
 scan(HWND hwnd, LPARAM lParam) {
+	// ハンドラからクライアントがあるか探し、あるならisaliveをたて、ないならマネージできるならマネージにほおり込む
 	Client *c = getclient(hwnd);
 	if (c)
 		c->isalive = true;
@@ -954,6 +1001,18 @@ setmfact(const Arg *arg) {
 	arrange();
 }
 
+	WNDCLASSEX winClass;
+
+void Reset( )
+{
+  grabkeys ( dwmhwnd );
+
+  EnumWindows ( scan , 0 );
+
+  setupbar ( winClass.hInstance );
+
+  arrange ( );
+}
 void
 setup(HINSTANCE hInstance) {
 
@@ -981,7 +1040,6 @@ setup(HINSTANCE hInstance) {
 
 	updategeom();
 
-	WNDCLASSEX winClass;
 
 	winClass.cbSize = sizeof(WNDCLASSEX);
 	winClass.style = 0;
@@ -1004,45 +1062,45 @@ setup(HINSTANCE hInstance) {
 	if (!dwmhwnd)
 		die("Error creating window");
 
-	grabkeys(dwmhwnd);
-
-	EnumWindows(scan, 0);
-
-	setupbar(hInstance);
-
-	arrange();
+  Reset( );
 	
 	/* Get function pointer for RegisterShellHookWindow */
-	RegisterShellHookWindow = (RegisterShellHookWindowProc)GetProcAddress(GetModuleHandle("USER32.DLL"), "RegisterShellHookWindow");
-	if (!RegisterShellHookWindow)
-		die("Could not find RegisterShellHookWindow");
+	//RegisterShellHookWindowF = (RegisterShellHookWindowProc)GetProcAddress(GetModuleHandle("user32.dll"), "RegisterShellHookWindow");
+	//if (!RegisterShellHookWindowF)
+	//	die("Could not find RegisterShellHookWindow");
 	RegisterShellHookWindow(dwmhwnd);
 	/* Grab a dynamic id for the SHELLHOOK message to be used later */
 	shellhookid = RegisterWindowMessage("SHELLHOOK");
 }
+
+
 
 void
 setupbar(HINSTANCE hInstance) {
 
 	unsigned int i, w = 0;
 
-	WNDCLASS winClass;
-	memset(&winClass, 0, sizeof winClass);
+  static bool alreadyCreated = false;
+  if ( !alreadyCreated )
+  {
+    WNDCLASS winClass;
+    memset ( &winClass , 0 , sizeof winClass );
 
-	winClass.style = 0;
-	winClass.lpfnWndProc = barhandler;
-	winClass.cbClsExtra = 0;
-	winClass.cbWndExtra = 0;
-	winClass.hInstance = hInstance;
-	winClass.hIcon = NULL;
-	winClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-	winClass.hbrBackground = NULL;
-	winClass.lpszMenuName = NULL;
-	winClass.lpszClassName = "dwm-bar";
+    winClass.style = 0;
+    winClass.lpfnWndProc = barhandler;
+    winClass.cbClsExtra = 0;
+    winClass.cbWndExtra = 0;
+    winClass.hInstance = hInstance;
+    winClass.hIcon = NULL;
+    winClass.hCursor = LoadCursor ( NULL , IDC_ARROW );
+    winClass.hbrBackground = NULL;
+    winClass.lpszMenuName = NULL;
+    winClass.lpszClassName = "dwm-bar";
 
-	if (!RegisterClass(&winClass))
-		die("Error registering window class");
-
+    if ( !RegisterClass ( &winClass ) )
+      die ( "Error registering window class" );
+    alreadyCreated = true;
+  }
 	barhwnd = CreateWindowEx(
 		WS_EX_TOOLWINDOW,
 		"dwm-bar",

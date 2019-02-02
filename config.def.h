@@ -7,7 +7,11 @@
 #define selbordercolor  0x00ff6600
 #define selbgcolor      0x00ff6600
 #define selfgcolor      0x00ffffff
-
+#ifdef MMod
+typedef BOOL ( *RegisterShellHookWindowProc ) ( HWND );
+RegisterShellHookWindowProc RegisterShellHookWindowF;
+void Reset ( );
+#endif
 static const unsigned int borderpx    = 2;        /* border pixel of windows */
 static const unsigned int textmargin  = 5;        /* margin for the text displayed on the bar */
 static bool showbar                   = true;     /* false means no bar */
@@ -56,6 +60,7 @@ static Key keys[] = {
 	{ MODKEY,                       'L',       setmfact,            {.f = +0.05} },
 	{ MODKEY,                       'I',       showclientclassname, {0} },
 	{ MODKEY,                       VK_RETURN, zoom,                {0} },
+	{ MODKEY,                       'R',       Reset,                {0} },
 	{ MODKEY,                       VK_TAB,    view,                {0} },
 	{ MODKEY|MOD_SHIFT,             'C',       killclient,          {0} },
 	{ MODKEY,                       'T',       setlayout,           {.v = &layouts[0]} },
